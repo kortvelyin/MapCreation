@@ -39,23 +39,32 @@ public class getplanes : NetworkBehaviour
     private uint playerNetID;
     private GameObject StepChild;  //to get a position  and rotation calculation
     public GameObject meshF;
+    [HideInInspector]
     public ARPlaneManager planeManager;
     public Material mat;
    // ARPlane planeNew;
-    public Text debug;
+    //public Text debug;
     Unity.Collections.NativeArray<Vector2> vectors;
     //PlayerObject playerobjscript;
-   // Vector3[] pontok = new Vector3[11];
+    // Vector3[] pontok = new Vector3[11];
     //private GameObject origo;
+    [HideInInspector]
     private ARTrackedImageManager aRTrackedImageManager;
+    [HideInInspector]
     public GameObject worldMap; //ami alá be vannak rakva a plane-k
+    [HideInInspector]
     public bool samePos = false; //a plane-k fedik-e egymást
-    public float PosDiff = 20f;  //a magasság távolság szűrésre, jelenleg a plafon magassága van kb beállítva
-    public int RotDiff = 360;  //rotáció eltérés, ha ki akarjátok próbálni
+    public static float PosDiff = 20f;  //a magasság távolság szűrésre, jelenleg a plafon magassága van kb beállítva
+    public static int RotDiff = 360;  //rotáció eltérés, ha ki akarjátok próbálni
+    [HideInInspector]
     public static bool readImage = false; //beolvasta-e már az origót jelentő képet
+    [HideInInspector]
     public static float DiameterCheck = 0; //számontartja hogy mekkora a legnagyobb pont-középpont távolság
     public bool OneWay; //ezt az editorban bepipálva csak a host(ha van külön csak szerver akkor az első játékos) osztja meg azt amit lát
+    [HideInInspector]
     public GameObject[] players; //ez alapján fönti el hogy ki az első
+    public static float poseClose = 1.5f;
+    public static float rotClose = 40;
 
     void Start()
     {
@@ -316,29 +325,11 @@ public class getplanes : NetworkBehaviour
             foreach (var entry in verticesDict)
             {
                 
-                if (entry.Value.playerNetID != playerNetID && Mathf.Abs((entry.Value.position - position).magnitude) <= DiameterCheck && Mathf.Abs(entry.Value.rotation.eulerAngles.z - rotation.eulerAngles.z) < RotDiff && Mathf.Abs(entry.Value.position.y - position.y) < PosDiff)
+                if (entry.Value.playerNetID != playerNetID && Mathf.Abs((entry.Value.position - position).magnitude) <= DiameterCheck  && Mathf.Abs(entry.Value.position.y - position.y) < PosDiff)
                 {
                     var entryVertices = JsonConvert.DeserializeObject<List<Vector3>>(entry.Value.Jvertice);
                     Vector3[] entryVerticess = entryVertices.ToArray();
-                    ////////
-                    ///a zöld részben van az a megoldás hogy előbb átkonvertálom az adatokat és aztán megkapja a függvény,
-                    ///jeleneleg csak átadom a függvénynek és ott megfelelően számít az adatokkal
-                    ////////
-                  /*  Vector2[] entryPolygon = new Vector2[entryVerticess.Length];
-                     Vector2[] newPolygon = new Vector2[verticess.Length];
-                     for (int i=0; i<entryVerticess.Length; i++)
-                     {
-                         entryPolygon[i] = new Vector2(entryVerticess[i].x + entry.Value.position.x, entryVerticess[i].z + entry.Value.position.z);
-                     }
-                     for (int i = 0; i < verticess.Length; i++)
-                     {
-                         newPolygon[i] = new Vector2(verticess[i].x + position.x, verticess[i].z + position.z);
-                     }
-
-                     Vector2 worldPoint = new Vector2(position.x, position.z);
-                     if(entryPolygon.Length>2 && newPolygon.Length>2)
-                    if (IsPointInPolygon4(entryPolygon, worldPoint, newPolygon))
-                     {*/
+                  
                     if(entryVerticess.Length>2 && verticess.Length>2)
                     if (IsPointInPolygon(entryVerticess, entry.Value.position, position, verticess))
                     {
@@ -352,10 +343,36 @@ public class getplanes : NetworkBehaviour
                         }
                     else
                     {
-                        Debug.Log("No");
-                      
-                        samePos = false;
-                    }
+                            //ha nincs benne de közel van, akkor tartsa meg az újat és vegye az y átlagát
+                            // a rotáció z és y egyike nagyobb int 45 fok, akkor a z és x átlagát vegye
+                            if (Mathf.Abs((entry.Value.position - position).magnitude) < poseClose)
+                            {
+                                if (Mathf.Abs(entry.Value.rotation.eulerAngles.z - rotation.eulerAngles.z) > rotClose)
+                                {
+                                    position = new Vector3((Mathf.Abs(position.x) + Mathf.Abs(entry.Value.position.x)) / 2, position.y, (Mathf.Abs(position.z) + Mathf.Abs(entry.Value.position.z)) / 2);
+                                    RpcRemovePlaneFromClient(entry.Value.id, entry.Value.playerNetID);
+                                    if (isServerOnly)
+                                        RemovePlane(entry.Value.id, entry.Value.playerNetID);
+                                    samePos = false;
+                                    Debug.Log("rotBig");
+                                }
+                                else
+                                {
+                                    position = new Vector3(position.x, (Mathf.Abs(position.y) + Mathf.Abs(entry.Value.position.y)) / 2, position.z);
+                                    RpcRemovePlaneFromClient(entry.Value.id, entry.Value.playerNetID);
+                                    if (isServerOnly)
+                                        RemovePlane(entry.Value.id, entry.Value.playerNetID);
+
+                                    samePos = false;
+                                    Debug.Log("rotSmall");
+                                }
+                            }
+                            else
+                            {
+                                Debug.Log("No");
+                                samePos = false;
+                            }
+                        }
                     
 
 
@@ -440,40 +457,54 @@ public class getplanes : NetworkBehaviour
             Vector3[] verticess = vertices.ToArray();
             foreach (var entry in verticesDict)
             {
-                if (entry.Value.playerNetID != playerNetID && Mathf.Abs((entry.Value.position - position).magnitude) <= DiameterCheck && Mathf.Abs(entry.Value.rotation.eulerAngles.z- rotation.eulerAngles.z) < RotDiff && Mathf.Abs(entry.Value.position.y - position.y) < PosDiff)
+                if (entry.Value.playerNetID != playerNetID && Mathf.Abs((entry.Value.position - position).magnitude) <= DiameterCheck  && Mathf.Abs(entry.Value.position.y - position.y) < PosDiff)
                 {
                     var entryVertices = JsonConvert.DeserializeObject<List<Vector3>>(entry.Value.Jvertice);
                     Vector3[] entryVerticess = entryVertices.ToArray();
-                    /* Vector2[] entryPolygon = new Vector2[entryVerticess.Length];
-                     Vector2[] newPolygon = new Vector2[verticess.Length];
-                     for (int i=0; i<entryVerticess.Length; i++)
-                     {
-                         entryPolygon[i] = new Vector2(entryVerticess[i].x + entry.Value.position.x, entryVerticess[i].z + entry.Value.position.z);
-                     }
-                     for (int i = 0; i < verticess.Length; i++)
-                     {
-                         newPolygon[i] = new Vector2(verticess[i].x + position.x, verticess[i].z + position.z);
-                     }
-
-                     Vector2 worldPoint = new Vector2(position.x, position.z);
-                     if(entryPolygon.Length>2 && newPolygon.Length>2)
-                    if (IsPointInPolygon4(entryPolygon, worldPoint, newPolygon))
-                     {*/
+                  
                     if (entryVerticess.Length > 2 && verticess.Length > 2)
                         if (IsPointInPolygon(entryVerticess, entry.Value.position, position, verticess))
-                    {
+                        {
                        
                         RpcRemovePlaneFromClient(id, playerNetID);
                             if (isServerOnly)
                                 RemovePlane(id, playerNetID);
                         Debug.Log("Yes, Points are also in mesh");
                         samePos = true;
+                          
                             break;
-                    }
+                        }
                     else
                     {
-                        Debug.Log("No");
-                        samePos = false;
+                            //ha nincs benne de közel van, akkor tartsa meg az újat és vegye az y átlagát
+                            // a rotáció z és y egyike nagyobb int 45 fok, akkor a z és x átlagát vegye
+                            if (Mathf.Abs((entry.Value.position - position).magnitude) <poseClose)
+                            { if (Mathf.Abs(entry.Value.rotation.eulerAngles.z - rotation.eulerAngles.z) > rotClose)
+                                {
+                                    //position = new Vector3((Mathf.Abs(position.x) + Mathf.Abs(entry.Value.position.x)) / 2, position.y, (Mathf.Abs(position.z) + Mathf.Abs(entry.Value.position.z)) / 2);
+                                    RpcRemovePlaneFromClient(entry.Value.id, entry.Value.playerNetID);
+                                    if (isServerOnly)
+                                        RemovePlane(entry.Value.id, entry.Value.playerNetID);
+                                    samePos = false;
+                                    Debug.Log("rotBig");
+                                }
+                                else
+                                {
+                                   // position = new Vector3(position.x, (Mathf.Abs(position.y) + Mathf.Abs(entry.Value.position.y)) / 2, position.z);
+                                    RpcRemovePlaneFromClient(entry.Value.id, entry.Value.playerNetID);
+                                    if (isServerOnly)
+                                        RemovePlane(entry.Value.id, entry.Value.playerNetID);
+
+                                    samePos = false;
+                                    Debug.Log("rotSmall");
+                                }
+                            }
+                            else
+                            {
+                                Debug.Log("No");
+                        samePos = false; }
+            
+                       
                     }
 
                     
@@ -685,7 +716,7 @@ public class getplanes : NetworkBehaviour
                 newMeshF.transform.localPosition = position;
                 newMeshF.transform.localRotation = rotation;
                 anchor = newMeshF.GetComponent<ARAnchor>();
-               
+                newMeshF.name = idtoDict;
                 /*if(isServer)
                 NetworkServer.Spawn(newMeshF);*/
                 planesDict.Add(idtoDict, newMeshF);
@@ -729,48 +760,7 @@ public class getplanes : NetworkBehaviour
 
     
 
-    public static bool IsPointInPolygon4(Vector2[] entryPolygon, Vector2 centerPoint, Vector2[] newPolygon)
-    {
-        float minX = entryPolygon[0].x;
-        float maxX = entryPolygon[0].x;
-        float minY = entryPolygon[0].y;
-        float maxY = entryPolygon[0].y;
-        bool result = false;
-        int j = entryPolygon.Length - 1;
-        for (int i = 0; i < entryPolygon.Length; i++)
-        {
-            Vector2 q = entryPolygon[i];
-            minX = Mathf.Min(q.x, minX);
-            maxX = Mathf.Max(q.x, maxX);
-            minY = Mathf.Min(q.y, minY);
-            maxY = Mathf.Max(q.y, maxY);
-            if (entryPolygon[i].y < centerPoint.y && entryPolygon[j].y >= centerPoint.y || entryPolygon[j].y < centerPoint.y && entryPolygon[i].y >= centerPoint.y)
-            {
-                if (entryPolygon[i].x + (centerPoint.y - entryPolygon[i].y) / (entryPolygon[j].y - entryPolygon[i].y) * (entryPolygon[j].x - entryPolygon[i].x) < centerPoint.x)
-                {
-                    result = !result;
-                }
-            }
-            j = i;
-        }
-        if (!result)
-            return result;
-        else
-        {
-            Debug.Log("center was inside");
-            for (int i = 0; i < newPolygon.Length; i++)
-            {
-                if (newPolygon[i].x < minX || newPolygon[i].x > maxX || newPolygon[i].y < minY || newPolygon[i].y > maxY)
-                {
-                    Debug.Log("Point wasnt inside");
-                    return false;
-                }
-            }
-            Debug.Log("Point was inside");
-            return true;
-        }
-    }
-
+  
     public static bool IsPointInPolygon(Vector3[] entryPolygon, Vector3 entryCenter, Vector3 centerPoint, Vector3[] newPolygon)
     {
         float minX = entryPolygon[0].x + entryCenter.x;
