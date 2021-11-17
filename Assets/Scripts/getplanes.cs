@@ -166,11 +166,9 @@ public class getplanes : NetworkBehaviour
     [TargetRpc]
     public void TargetCreatePlanesFromServer(NetworkConnection target, string json, Vector3 position, Quaternion rotation, int id, int boundarylength, uint playerNetID)
     {
-        Debug.Log("sorry");
         var vertices = JsonConvert.DeserializeObject<List<Vector3>>(json);
         Vector3[] verticess = vertices.ToArray();
         AddPlane(verticess, position, rotation, id, boundarylength, playerNetID);
-
     }
 
    
@@ -202,31 +200,18 @@ public class getplanes : NetworkBehaviour
 
     void OnPlanesChanged(ARPlanesChangedEventArgs eventArgs)
     {
-
-        // Debug.Log("Planes Changed");
         if (isLocalPlayer)
         {
-
-            // Debug.Log("We are local players");
             foreach (ARPlane plane in eventArgs.removed)
             {
                 plane.boundaryChanged -= UpdatePlane;
-                Debug.Log("PlanesRemoved, unsubscribed form event(probably)");
                 CmdRemoveMapInfo(plane.GetInstanceID(), playerNetID);
-                // CmdRemovePlaneFromServer(plane.GetInstanceID(), playerNetID);
-
             }
-
-
 
             foreach (ARPlane plane in eventArgs.added)
             {
-                Debug.Log("In AddPlaneEvent as client");
-                Debug.Log("asking plane informations from server, number of planes in Planesdict: " + planesDict.Count);
-                Debug.Log("asking plane informations from server, number of planes inverticesdict: " + verticesDict.Count);
                 plane.boundaryChanged += UpdatePlane;
-                Debug.Log("PlanesAdded and subscibed to event (probably)");
-
+               
                 //if (StepChild == null)
                 {
                     StepChild = GameObject.Find("WorldMap").gameObject.transform.GetChild(0).gameObject;
@@ -481,7 +466,7 @@ public class getplanes : NetworkBehaviour
                             if (Mathf.Abs((entry.Value.position - position).magnitude) <poseClose)
                             { if (Mathf.Abs(entry.Value.rotation.eulerAngles.z - rotation.eulerAngles.z) > rotClose)
                                 {
-                                    //position = new Vector3((Mathf.Abs(position.x) + Mathf.Abs(entry.Value.position.x)) / 2, position.y, (Mathf.Abs(position.z) + Mathf.Abs(entry.Value.position.z)) / 2);
+                                    position = new Vector3((Mathf.Abs(position.x) + Mathf.Abs(entry.Value.position.x)) / 2, position.y, (Mathf.Abs(position.z) + Mathf.Abs(entry.Value.position.z)) / 2);
                                     RpcRemovePlaneFromClient(entry.Value.id, entry.Value.playerNetID);
                                     if (isServerOnly)
                                         RemovePlane(entry.Value.id, entry.Value.playerNetID);
@@ -490,7 +475,7 @@ public class getplanes : NetworkBehaviour
                                 }
                                 else
                                 {
-                                   // position = new Vector3(position.x, (Mathf.Abs(position.y) + Mathf.Abs(entry.Value.position.y)) / 2, position.z);
+                                    position = new Vector3(position.x, (Mathf.Abs(position.y) + Mathf.Abs(entry.Value.position.y)) / 2, position.z);
                                     RpcRemovePlaneFromClient(entry.Value.id, entry.Value.playerNetID);
                                     if (isServerOnly)
                                         RemovePlane(entry.Value.id, entry.Value.playerNetID);
